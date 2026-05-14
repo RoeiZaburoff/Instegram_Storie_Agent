@@ -17,5 +17,7 @@ export const config = {
   headless: process.env.HEADLESS === 'true',
   whatsappWebhookUrl: process.env.WHATSAPP_WEBHOOK_URL,
   whatsappAuthToken: process.env.WHATSAPP_AUTH_TOKEN,
-  dryRun: process.env.DRY_RUN === 'true'
+  dryRun: process.env.DRY_RUN === 'true',
+  mobileEmulation: process.env.MOBILE_EMULATION !== 'false',
+  mobileDevice: process.env.MOBILE_DEVICE ?? 'iPhone 13'
 };

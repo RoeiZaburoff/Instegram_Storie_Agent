@@ -33,6 +33,8 @@ Important environment variables:
 | `WHATSAPP_AUTH_TOKEN` | Optional bearer token for the WhatsApp provider endpoint. |
 | `DRY_RUN` | Set to `true` to test webhook parsing and notifications without browser automation. |
 | `WHATSAPP_UPLOAD_DIR` | Folder where multipart WhatsApp media uploads are saved before posting. Defaults to `./tmp/whatsapp`. |
+| `MOBILE_EMULATION` | Set to `false` for desktop mode. Defaults to mobile mode because Instagram Story upload requires mobile web controls. |
+| `MOBILE_DEVICE` | Playwright device descriptor used for mobile mode. Defaults to `iPhone 13`. |
 
 
 ## Local Instagram login setup
@@ -54,7 +56,7 @@ Use a persistent Playwright profile so Instagram cookies/session data survive ac
 3. Start the agent with a visible browser and a fixed profile folder:
 
    ```bash
-   HEADLESS=false CHROME_USER_DATA_DIR="$(pwd)/playwright-profile" npm start
+   HEADLESS=false CHROME_USER_DATA_DIR="$(pwd)/playwright-profile" MOBILE_EMULATION=true MOBILE_DEVICE="iPhone 13" npm start
    ```
 
 4. Send a test webhook request, for example with `DRY_RUN=false` and a valid local media file:
@@ -115,6 +117,19 @@ curl -X POST http://localhost:3000/webhook/whatsapp/upload-story \
 ```
 
 The route saves the uploaded WhatsApp media to `WHATSAPP_UPLOAD_DIR` and reuses the same Instagram Story upload workflow.
+
+
+## Troubleshooting
+
+### Instagram opens, but there is no Story upload button
+
+Instagram Web only exposes Story upload controls in mobile/app-like web mode. Make sure mobile emulation is enabled:
+
+```bash
+HEADLESS=false CHROME_USER_DATA_DIR="$(pwd)/playwright-profile" MOBILE_EMULATION=true MOBILE_DEVICE="iPhone 13" npm start
+```
+
+If you intentionally need desktop mode, set `MOBILE_EMULATION=false`; Story upload may not be available in that mode.
 
 ## Security and reporting behavior
 

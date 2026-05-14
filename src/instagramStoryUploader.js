@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { chromium } from '@playwright/test';
+import { chromium, devices } from 'playwright';
 
 const SECURITY_PATTERNS = [/security/i, /verification/i, /two-factor/i, /two factor/i, /enter code/i, /suspicious/i];
 
@@ -47,6 +47,8 @@ export class InstagramStoryUploader {
   async openBrowser() {
     if (this.options.chromeCdpUrl) {
       console.log(`[browser] Connecting to existing Chrome over CDP: ${this.options.chromeCdpUrl}`);
+      console.log(`[browser] Mobile emulation requested: ${this.options.mobileEmulation ? 'enabled' : 'disabled'}`);
+      console.log('[browser] CDP mode reuses the existing browser context; launch-time mobile emulation options only apply when this agent launches Chrome.');
       const browser = await chromium.connectOverCDP(this.options.chromeCdpUrl);
       const context = browser.contexts()[0] ?? await browser.newContext();
       const page = context.pages()[0] ?? await context.newPage();
@@ -59,12 +61,47 @@ export class InstagramStoryUploader {
     console.log(`[browser] Headless mode: ${this.options.headless ? 'enabled' : 'disabled'}`);
     console.log('[browser] First run may require manual Instagram login and 2FA/security approval in the opened browser.');
 
-    const context = await chromium.launchPersistentContext(userDataDir, {
-      headless: this.options.headless,
-      executablePath: this.options.chromeExecutablePath
-    });
+    const contextOptions = this.contextOptions();
+    const context = await chromium.launchPersistentContext(userDataDir, contextOptions);
     const page = context.pages()[0] ?? await context.newPage();
     return { context, page, close: () => context.close() };
+  }
+
+  contextOptions() {
+    const baseOptions = {
+      headless: this.options.headless,
+      executablePath: this.options.chromeExecutablePath
+    };
+
+    if (!this.options.mobileEmulation) {
+      console.log('[browser] Mobile emulation: disabled; using desktop browser mode.');
+      console.log('[browser] Reminder: Instagram Story upload normally requires mobile web mode.');
+      return baseOptions;
+    }
+
+    const requestedDevice = this.options.mobileDevice ?? 'iPhone 13';
+    const device = devices[requestedDevice] ?? devices['iPhone 13'];
+    if (!devices[requestedDevice]) {
+      console.warn(`[browser] Mobile device profile "${requestedDevice}" was not found; falling back to iPhone 13.`);
+    }
+
+    const { defaultBrowserType: _defaultBrowserType, ...deviceOptions } = device;
+    const mobileOptions = {
+      ...deviceOptions,
+      ...baseOptions,
+      viewport: device.viewport,
+      userAgent: device.userAgent,
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: device.deviceScaleFactor
+    };
+
+    console.log('[browser] Mobile emulation: enabled.');
+    console.log(`[browser] Mobile device profile: ${devices[requestedDevice] ? requestedDevice : 'iPhone 13'}`);
+    console.log(`[browser] Mobile viewport: ${mobileOptions.viewport.width}x${mobileOptions.viewport.height} @ ${mobileOptions.deviceScaleFactor}x`);
+    console.log(`[browser] Mobile user agent: ${mobileOptions.userAgent}`);
+    console.log('[browser] Reminder: Instagram Story upload requires mobile web mode.');
+    return mobileOptions;
   }
 
   async openStoryComposer(page) {
