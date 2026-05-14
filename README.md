@@ -119,6 +119,16 @@ curl -X POST http://localhost:3000/webhook/whatsapp/upload-story \
 The route saves the uploaded WhatsApp media to `WHATSAPP_UPLOAD_DIR` and reuses the same Instagram Story upload workflow.
 
 
+## Debug runtime config
+
+To verify what the running server actually loaded from `.env`, call:
+
+```bash
+curl http://localhost:3000/debug/config
+```
+
+The response intentionally excludes webhook URLs and auth tokens.
+
 ## Troubleshooting
 
 ### Instagram opens, but there is no Story upload button

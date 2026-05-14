@@ -16,6 +16,7 @@ test('builds mobile persistent context options from the requested device', () =>
   assert.equal(options.headless, false);
   assert.equal(options.viewport.width, 390);
   assert.match(options.userAgent, /iPhone/);
+  assert.equal(options.defaultBrowserType, 'webkit');
 });
 
 test('keeps desktop context options when mobile emulation is disabled', () => {
@@ -31,4 +32,23 @@ test('keeps desktop context options when mobile emulation is disabled', () => {
     headless: true,
     executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
   });
+});
+
+test('throws a clear error when the requested mobile device is unknown', () => {
+  const uploader = new InstagramStoryUploader({
+    headless: false,
+    mobileEmulation: true,
+    mobileDevice: 'Not A Real Device'
+  });
+
+  assert.throws(() => uploader.contextOptions(), /Unknown Playwright mobile device: Not A Real Device/);
+});
+
+test('rejects CDP when mobile emulation is enabled', async () => {
+  const uploader = new InstagramStoryUploader({
+    mobileEmulation: true,
+    chromeCdpUrl: 'http://127.0.0.1:9222'
+  });
+
+  await assert.rejects(() => uploader.openBrowser(), /CHROME_CDP_URL cannot be used with mobile emulation/);
 });

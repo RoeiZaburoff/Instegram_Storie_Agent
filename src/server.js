@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { config } from './config.js';
 import { InstagramStoryUploader, SecurityCheckRequiredError } from './instagramStoryUploader.js';
@@ -18,6 +19,17 @@ const whatsappUpload = createWhatsAppUploadMiddleware({ uploadDir: config.whatsa
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, dryRun: config.dryRun });
+});
+
+app.get('/debug/config', (_req, res) => {
+  res.json({
+    headless: config.headless,
+    dryRun: config.dryRun,
+    mobileEmulation: config.mobileEmulation,
+    mobileDevice: config.mobileDevice,
+    chromeUserDataDir: config.chromeUserDataDir,
+    hasChromeCdpUrl: Boolean(config.chromeCdpUrl)
+  });
 });
 
 app.post('/webhook/whatsapp/upload-story', (req, res) => {
