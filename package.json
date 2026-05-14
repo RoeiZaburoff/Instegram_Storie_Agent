@@ -1,0 +1,25 @@
+{
+  "name": "instegram-storie-agent",
+  "version": "0.1.0",
+  "description": "WhatsApp-controlled Instagram Story upload automation agent.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "instagram",
+    "stories",
+    "whatsapp",
+    "automation"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@playwright/test": "^1.44.0",
+    "express": "^4.18.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
