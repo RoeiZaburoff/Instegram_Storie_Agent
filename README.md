@@ -35,6 +35,8 @@ Important environment variables:
 | `WHATSAPP_UPLOAD_DIR` | Folder where multipart WhatsApp media uploads are saved before posting. Defaults to `./tmp/whatsapp`. |
 | `MOBILE_EMULATION` | Set to `false` for desktop mode. Defaults to mobile mode because Instagram Story upload requires mobile web controls. |
 | `MOBILE_DEVICE` | Playwright device descriptor used for mobile mode. Defaults to `iPhone 13`. |
+| `DEBUG_PAUSE_MS` | Optional milliseconds to pause after an upload error before cleanup. Defaults to `0`. |
+| `KEEP_BROWSER_OPEN_ON_ERROR` | Set to `true` to leave the browser open after an upload error for debugging. Defaults to `false`. |
 
 
 ## Local Instagram login setup

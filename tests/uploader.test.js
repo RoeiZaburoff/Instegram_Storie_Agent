@@ -50,5 +50,5 @@ test('rejects CDP when mobile emulation is enabled', async () => {
     chromeCdpUrl: 'http://127.0.0.1:9222'
   });
 
-  await assert.rejects(() => uploader.openBrowser(), /CHROME_CDP_URL cannot be used with mobile emulation/);
+  await assert.rejects(() => uploader.openBrowser(), /CHROME_CDP_URL cannot be used with MOBILE_EMULATION=true/);
 });

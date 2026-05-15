@@ -26,6 +26,8 @@ test('debug config route returns safe runtime configuration values', async () =>
     assert.equal(typeof body.dryRun, 'boolean');
     assert.equal(body.mobileDevice, process.env.MOBILE_DEVICE ?? 'iPhone 13');
     assert.equal(typeof body.hasChromeCdpUrl, 'boolean');
+    assert.equal(typeof body.debugPauseMs, 'number');
+    assert.equal(typeof body.keepBrowserOpenOnError, 'boolean');
     assert.equal(Object.hasOwn(body, 'whatsappAuthToken'), false);
     assert.equal(Object.hasOwn(body, 'whatsappWebhookUrl'), false);
   });

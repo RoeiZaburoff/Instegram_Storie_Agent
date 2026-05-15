@@ -28,7 +28,9 @@ app.get('/debug/config', (_req, res) => {
     mobileEmulation: config.mobileEmulation,
     mobileDevice: config.mobileDevice,
     chromeUserDataDir: config.chromeUserDataDir,
-    hasChromeCdpUrl: Boolean(config.chromeCdpUrl)
+    hasChromeCdpUrl: Boolean(config.chromeCdpUrl),
+    debugPauseMs: config.debugPauseMs,
+    keepBrowserOpenOnError: config.keepBrowserOpenOnError
   });
 });
 

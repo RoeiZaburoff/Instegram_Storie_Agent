@@ -60,3 +60,22 @@ test('allows mobile emulation to be disabled', async () => {
     else process.env.MOBILE_EMULATION = previous;
   }
 });
+
+test('defaults debug pause and keep-open flags safely', async () => {
+  const previousPause = process.env.DEBUG_PAUSE_MS;
+  const previousKeepOpen = process.env.KEEP_BROWSER_OPEN_ON_ERROR;
+  delete process.env.DEBUG_PAUSE_MS;
+  delete process.env.KEEP_BROWSER_OPEN_ON_ERROR;
+
+  try {
+    const moduleUrl = new URL(`../src/config.js?case=${Date.now()}-${Math.random()}`, import.meta.url);
+    const config = (await import(moduleUrl)).config;
+    assert.equal(config.debugPauseMs, 0);
+    assert.equal(config.keepBrowserOpenOnError, false);
+  } finally {
+    if (previousPause === undefined) delete process.env.DEBUG_PAUSE_MS;
+    else process.env.DEBUG_PAUSE_MS = previousPause;
+    if (previousKeepOpen === undefined) delete process.env.KEEP_BROWSER_OPEN_ON_ERROR;
+    else process.env.KEEP_BROWSER_OPEN_ON_ERROR = previousKeepOpen;
+  }
+});

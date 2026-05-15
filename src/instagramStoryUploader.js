@@ -23,6 +23,7 @@ export class InstagramStoryUploader {
 
     const browserSession = await this.openBrowser();
     const { browser, context, page, close } = browserSession;
+    let uploadError;
     try {
       await page.goto(this.options.instagramUrl, { waitUntil: 'domcontentloaded' });
       await this.checkSecurity(page);
@@ -35,18 +36,27 @@ export class InstagramStoryUploader {
       await this.waitForUploadCompletion(page);
       return { browserConnected: Boolean(browser), contextPages: context.pages().length };
     } catch (error) {
+      uploadError = error;
       if (!(error instanceof SecurityCheckRequiredError)) {
         error.screenshotPath = await this.screenshot(page).catch(() => undefined);
       }
+      if (this.options.debugPauseMs > 0) {
+        console.log(`[playwright-debug] Pausing ${this.options.debugPauseMs}ms before cleanup.`);
+        await page.waitForTimeout(this.options.debugPauseMs).catch(() => null);
+      }
       throw error;
     } finally {
-      await close();
+      if (uploadError && this.options.keepBrowserOpenOnError) {
+        console.log('[playwright-debug] Keeping browser open after error because KEEP_BROWSER_OPEN_ON_ERROR=true.');
+      } else {
+        await close();
+      }
     }
   }
 
   async openBrowser() {
     if (this.options.mobileEmulation && this.options.chromeCdpUrl) {
-      throw new Error('CHROME_CDP_URL cannot be used with mobile emulation. Unset CHROME_CDP_URL.');
+      throw new Error('CHROME_CDP_URL cannot be used with MOBILE_EMULATION=true. Unset CHROME_CDP_URL.');
     }
 
     if (this.options.chromeCdpUrl) {
@@ -58,7 +68,16 @@ export class InstagramStoryUploader {
     }
 
     const userDataDir = this.options.chromeUserDataDir;
+    if (!userDataDir) {
+      throw new Error('CHROME_USER_DATA_DIR is required for persistent Playwright profile launch.');
+    }
+
     await fs.mkdir(userDataDir, { recursive: true });
+
+    console.log('[playwright] userDataDir:', userDataDir);
+    console.log('[playwright] headless:', this.options.headless);
+    console.log('[playwright] mobileEmulation:', this.options.mobileEmulation);
+    console.log('[playwright] mobileDevice:', this.options.mobileDevice);
 
     const contextOptions = this.contextOptions();
     const context = await chromium.launchPersistentContext(userDataDir, contextOptions);
@@ -81,9 +100,6 @@ export class InstagramStoryUploader {
     };
 
     if (!this.options.mobileEmulation) {
-      console.log('[playwright] userDataDir:', this.options.chromeUserDataDir);
-      console.log('[playwright] mobileEmulation:', false);
-      console.log('[playwright] mobileDevice:', this.options.mobileDevice);
       console.log('[playwright] device descriptor:', null);
       console.log('[browser] Reminder: Instagram Story upload normally requires mobile web mode.');
       return baseOptions;
@@ -101,9 +117,6 @@ export class InstagramStoryUploader {
       executablePath: this.options.chromeExecutablePath
     };
 
-    console.log('[playwright] userDataDir:', this.options.chromeUserDataDir);
-    console.log('[playwright] mobileEmulation:', true);
-    console.log('[playwright] mobileDevice:', requestedDevice);
     console.log('[playwright] device descriptor:', device);
     console.log(`[browser] Mobile viewport: ${device.viewport.width}x${device.viewport.height} @ ${device.deviceScaleFactor}x`);
     console.log(`[browser] Mobile user agent: ${device.userAgent}`);
