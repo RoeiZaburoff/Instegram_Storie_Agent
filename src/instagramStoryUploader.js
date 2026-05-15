@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { chromium, devices } from 'playwright';
+import path from 'node:path';
 
 const SECURITY_PATTERNS = [/security/i, /verification/i, /two-factor/i, /two factor/i, /enter code/i, /suspicious/i];
 
