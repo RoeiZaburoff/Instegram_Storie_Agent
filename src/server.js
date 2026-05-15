@@ -1,8 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import { config } from './config.js';
 import { InstagramStoryUploader, SecurityCheckRequiredError } from './instagramStoryUploader.js';
 import { WhatsAppNotifier } from './notifier.js';
 import { normalizeCommand, resolveMediaFile, summarizePost } from './protocol.js';
+import { createWhatsAppUploadMiddleware, normalizeMultipartUpload } from './whatsappUpload.js';
 
 const app = express();
 app.use(express.json({ limit: '25mb' }));
@@ -13,9 +15,40 @@ const notifier = new WhatsAppNotifier({
   dryRun: config.dryRun
 });
 const uploader = new InstagramStoryUploader(config);
+const whatsappUpload = createWhatsAppUploadMiddleware({ uploadDir: config.whatsappUploadDir });
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, dryRun: config.dryRun });
+});
+
+app.get('/debug/config', (_req, res) => {
+  res.json({
+    headless: config.headless,
+    dryRun: config.dryRun,
+    mobileEmulation: config.mobileEmulation,
+    mobileDevice: config.mobileDevice,
+    chromeUserDataDir: config.chromeUserDataDir,
+    hasChromeCdpUrl: Boolean(config.chromeCdpUrl),
+    debugPauseMs: config.debugPauseMs,
+    keepBrowserOpenOnError: config.keepBrowserOpenOnError
+  });
+});
+
+app.post('/webhook/whatsapp/upload-story', (req, res) => {
+  whatsappUpload(req, res, async (uploadError) => {
+    let command;
+    try {
+      if (uploadError) throw uploadError;
+      command = normalizeCommand(normalizeMultipartUpload(req.body, req.files ?? []));
+      res.status(202).json({ accepted: true, request_id: command.requestId });
+      await handleUploadStory(command);
+    } catch (error) {
+      const alreadyAccepted = res.headersSent;
+      if (!alreadyAccepted) res.status(400).json({ accepted: false, error: error.message });
+      else console.error('[upload-story:multipart]', error);
+      if (!alreadyAccepted && command?.chatId) await notifier.error(command.chatId, error.message);
+    }
+  });
 });
 
 app.post('/webhook/whatsapp', async (req, res) => {

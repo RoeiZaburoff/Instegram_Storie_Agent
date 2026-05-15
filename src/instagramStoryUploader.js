@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
+import { chromium, devices } from 'playwright';
 import path from 'node:path';
-import { chromium } from '@playwright/test';
 
 const SECURITY_PATTERNS = [/security/i, /verification/i, /two-factor/i, /two factor/i, /enter code/i, /suspicious/i];
 
@@ -24,6 +24,7 @@ export class InstagramStoryUploader {
 
     const browserSession = await this.openBrowser();
     const { browser, context, page, close } = browserSession;
+    let uploadError;
     try {
       await page.goto(this.options.instagramUrl, { waitUntil: 'domcontentloaded' });
       await this.checkSecurity(page);
@@ -36,30 +37,92 @@ export class InstagramStoryUploader {
       await this.waitForUploadCompletion(page);
       return { browserConnected: Boolean(browser), contextPages: context.pages().length };
     } catch (error) {
+      uploadError = error;
       if (!(error instanceof SecurityCheckRequiredError)) {
         error.screenshotPath = await this.screenshot(page).catch(() => undefined);
       }
+      if (this.options.debugPauseMs > 0) {
+        console.log(`[playwright-debug] Pausing ${this.options.debugPauseMs}ms before cleanup.`);
+        await page.waitForTimeout(this.options.debugPauseMs).catch(() => null);
+      }
       throw error;
     } finally {
-      await close();
+      if (uploadError && this.options.keepBrowserOpenOnError) {
+        console.log('[playwright-debug] Keeping browser open after error because KEEP_BROWSER_OPEN_ON_ERROR=true.');
+      } else {
+        await close();
+      }
     }
   }
 
   async openBrowser() {
+    if (this.options.mobileEmulation && this.options.chromeCdpUrl) {
+      throw new Error('CHROME_CDP_URL cannot be used with MOBILE_EMULATION=true. Unset CHROME_CDP_URL.');
+    }
+
     if (this.options.chromeCdpUrl) {
+      console.log(`[browser] Connecting to existing Chrome over CDP: ${this.options.chromeCdpUrl}`);
       const browser = await chromium.connectOverCDP(this.options.chromeCdpUrl);
       const context = browser.contexts()[0] ?? await browser.newContext();
       const page = context.pages()[0] ?? await context.newPage();
       return { browser, context, page, close: () => browser.close() };
     }
 
-    const userDataDir = this.options.chromeUserDataDir ?? path.resolve('.chrome-profile');
-    const context = await chromium.launchPersistentContext(userDataDir, {
+    const userDataDir = this.options.chromeUserDataDir;
+    if (!userDataDir) {
+      throw new Error('CHROME_USER_DATA_DIR is required for persistent Playwright profile launch.');
+    }
+
+    await fs.mkdir(userDataDir, { recursive: true });
+
+    console.log('[playwright] userDataDir:', userDataDir);
+    console.log('[playwright] headless:', this.options.headless);
+    console.log('[playwright] mobileEmulation:', this.options.mobileEmulation);
+    console.log('[playwright] mobileDevice:', this.options.mobileDevice);
+
+    const contextOptions = this.contextOptions();
+    const context = await chromium.launchPersistentContext(userDataDir, contextOptions);
+    const page = context.pages()[0] || await context.newPage();
+
+    console.log('[playwright-debug]', await page.evaluate(() => ({
+      userAgent: navigator.userAgent,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      maxTouchPoints: navigator.maxTouchPoints
+    })));
+
+    return { context, page, close: () => context.close() };
+  }
+
+  contextOptions() {
+    const baseOptions = {
       headless: this.options.headless,
       executablePath: this.options.chromeExecutablePath
-    });
-    const page = context.pages()[0] ?? await context.newPage();
-    return { context, page, close: () => context.close() };
+    };
+
+    if (!this.options.mobileEmulation) {
+      console.log('[playwright] device descriptor:', null);
+      console.log('[browser] Reminder: Instagram Story upload normally requires mobile web mode.');
+      return baseOptions;
+    }
+
+    const requestedDevice = this.options.mobileDevice || 'iPhone 13';
+    const device = devices[requestedDevice];
+    if (!device) {
+      throw new Error(`Unknown Playwright mobile device: ${requestedDevice}`);
+    }
+
+    const contextOptions = {
+      ...device,
+      headless: this.options.headless,
+      executablePath: this.options.chromeExecutablePath
+    };
+
+    console.log('[playwright] device descriptor:', device);
+    console.log(`[browser] Mobile viewport: ${device.viewport.width}x${device.viewport.height} @ ${device.deviceScaleFactor}x`);
+    console.log(`[browser] Mobile user agent: ${device.userAgent}`);
+    console.log('[browser] Reminder: Instagram Story upload requires mobile web mode.');
+    return contextOptions;
   }
 
   async openStoryComposer(page) {

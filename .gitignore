@@ -4,3 +4,4 @@ node_modules/
 screenshots/*.png
 tmp/*
 Stories/
+playwright-profile/

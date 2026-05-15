@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeCommand, normalizeHashtags, summarizePost } from '../src/protocol.js';
+import { normalizeMultipartUpload } from '../src/whatsappUpload.js';
 
 test('normalizes Upload Story commands from WhatsApp JSON', () => {
   const command = normalizeCommand({
@@ -37,4 +38,26 @@ test('summarizes posted content for WhatsApp confirmations', () => {
   });
 
   assert.equal(summarizePost(command, '/Stories/story.png'), 'story.png with #Launch');
+});
+
+test('normalizes multipart WhatsApp media uploads into Upload Story commands', () => {
+  const payload = normalizeMultipartUpload(
+    {
+      from: '+15550001111',
+      caption: 'Fresh image',
+      Hashtags: '["Nature","Launch"]',
+      Location_Tag: 'Tel Aviv'
+    },
+    [{ fieldname: 'image', path: '/tmp/whatsapp/story.jpg' }]
+  );
+
+  const command = normalizeCommand(payload);
+  assert.equal(command.chatId, '+15550001111');
+  assert.equal(command.media.whatsappFilePath, '/tmp/whatsapp/story.jpg');
+  assert.deepEqual(command.metadata.hashtags, ['#Nature', '#Launch']);
+  assert.equal(command.metadata.locationTag, 'Tel Aviv');
+});
+
+test('rejects multipart uploads without media files', () => {
+  assert.throws(() => normalizeMultipartUpload({ from: '+15550001111' }, []), /Missing uploaded media file/);
 });
