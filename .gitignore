@@ -1,0 +1,7 @@
+node_modules/
+.env
+screenshots/*.png
+tmp/*
+Stories/
+playwright-profile/
+playwright-profile-pixel7/
