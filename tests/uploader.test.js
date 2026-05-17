@@ -11,6 +11,7 @@ test('builds mobile persistent context options from the requested device', () =>
   });
 
   const options = uploader.contextOptions();
+
   assert.equal(options.isMobile, true);
   assert.equal(options.hasTouch, true);
   assert.equal(options.headless, false);
@@ -28,6 +29,7 @@ test('keeps desktop context options when mobile emulation is disabled', () => {
   });
 
   const options = uploader.contextOptions();
+
   assert.deepEqual(options, {
     headless: true,
     executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'

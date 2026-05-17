@@ -25,6 +25,7 @@ export class InstagramStoryUploader {
     const browserSession = await this.openBrowser();
     const { browser, context, page, close } = browserSession;
     let uploadError;
+
     try {
       await page.goto(this.options.instagramUrl, { waitUntil: 'domcontentloaded' });
       await this.checkSecurity(page);
@@ -122,6 +123,7 @@ export class InstagramStoryUploader {
     console.log(`[browser] Mobile viewport: ${device.viewport.width}x${device.viewport.height} @ ${device.deviceScaleFactor}x`);
     console.log(`[browser] Mobile user agent: ${device.userAgent}`);
     console.log('[browser] Reminder: Instagram Story upload requires mobile web mode.');
+
     return contextOptions;
   }
 
@@ -136,6 +138,7 @@ export class InstagramStoryUploader {
     await page.getByRole('navigation').getByRole('link', { name: 'Home' }).click({ timeout: 8000 }).catch(() => null);
 
     await this.screenshot(page, 'before-story-story').catch(() => null);
+
     console.log('[instagram-flow] Clicking Story Story button');
     await page.getByRole('button', { name: /Story Story/i }).click({ timeout: 15000 });
   }
@@ -145,6 +148,7 @@ export class InstagramStoryUploader {
 
     console.log('[instagram-flow] Waiting for file chooser');
     const chooserPromise = page.waitForEvent('filechooser', { timeout: 15000 }).catch(() => null);
+
     await storyButton.click({ timeout: 15000 }).catch(() => null);
 
     const chooser = await chooserPromise;
@@ -163,16 +167,19 @@ export class InstagramStoryUploader {
       return;
     }
 
-    await storyButton.setInputFiles(mediaPath).then(async () => {
-      console.log('[instagram-flow] Setting file:', mediaPath);
-      await this.afterMediaSelected(page);
-    }).catch((error) => {
-      throw new Error(`Unable to attach media via Story Story button: ${error.message}`);
-    });
+    await storyButton.setInputFiles(mediaPath)
+      .then(async () => {
+        console.log('[instagram-flow] Setting file:', mediaPath);
+        await this.afterMediaSelected(page);
+      })
+      .catch((error) => {
+        throw new Error(`Unable to attach media via Story Story button: ${error.message}`);
+      });
   }
 
   async afterMediaSelected(page) {
     await this.screenshot(page, 'after-selecting-file').catch(() => null);
+
     console.log('[instagram-flow] Opening story create page');
     await page.goto('https://www.instagram.com/create/story/', { waitUntil: 'domcontentloaded' }).catch(() => null);
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
@@ -191,12 +198,15 @@ export class InstagramStoryUploader {
 
   async share(page) {
     await this.checkSecurity(page);
+
     page.once('dialog', async (dialog) => {
       console.log(`[instagram-dialog] ${dialog.message()}`);
       await dialog.dismiss().catch(() => {});
     });
+
     await this.screenshot(page, 'before-add-to-story').catch(() => null);
     await humanDelay();
+
     console.log('[instagram-flow] Clicking Add to your story');
     await clickFirst(page, [
       page.getByRole('button', { name: /Add to your story/i }),
