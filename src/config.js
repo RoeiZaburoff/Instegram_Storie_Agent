@@ -19,6 +19,8 @@ export const config = {
   headless: process.env.HEADLESS === 'true',
   whatsappWebhookUrl: process.env.WHATSAPP_WEBHOOK_URL,
   whatsappAuthToken: process.env.WHATSAPP_AUTH_TOKEN,
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
   dryRun: process.env.DRY_RUN === 'true',
   mobileEmulation: process.env.MOBILE_EMULATION !== 'false',
   mobileDevice: process.env.MOBILE_DEVICE ?? 'Pixel 7',

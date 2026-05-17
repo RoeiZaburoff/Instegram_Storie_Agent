@@ -18,6 +18,7 @@ import {
 
 const app = express();
 app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 const notifier = new WhatsAppNotifier({
   webhookUrl: config.whatsappWebhookUrl,
@@ -64,7 +65,10 @@ app.post('/webhook/whatsapp/upload-story', (req, res) => {
 
 app.post('/webhook/whatsapp', async (req, res) => {
   try {
-    const message = normalizeWhatsAppMessage(req.body);
+    const payload = isTwilioWhatsAppPayload(req.body)
+      ? normalizeTwilioWhatsAppPayload(req.body)
+      : req.body;
+    const message = normalizeWhatsAppMessage(payload);
     res.status(202).json({ accepted: true, request_id: message.requestId });
     await handleWhatsAppMessage(message);
   } catch (error) {
@@ -74,6 +78,48 @@ app.post('/webhook/whatsapp', async (req, res) => {
   }
 });
 
+function isTwilioWhatsAppPayload(body = {}) {
+  return Boolean(
+    body.SmsMessageSid
+      || body.MessageSid
+      || body.WaId
+      || body.From?.startsWith?.('whatsapp:')
+  );
+}
+
+function normalizeTwilioWhatsAppPayload(body = {}) {
+  console.log('[twilio-whatsapp] incoming:', {
+    from: body.From,
+    body: body.Body,
+    numMedia: body.NumMedia,
+    hasMediaUrl0: Boolean(body.MediaUrl0)
+  });
+
+  const from = body.From || body.from || body.chat_id;
+  if (!from) {
+    throw new Error('Missing Twilio WhatsApp From field.');
+  }
+
+  const text = body.Body || body.text || body.message || '';
+  const normalized = {
+    from,
+    chat_id: from,
+    text,
+    command: text,
+    rawProvider: 'twilio',
+    providerPayload: body
+  };
+
+  if (body.NumMedia && Number(body.NumMedia) > 0 && body.MediaUrl0) {
+    normalized.media = {
+      url: body.MediaUrl0,
+      contentType: body.MediaContentType0,
+      provider: 'twilio'
+    };
+  }
+
+  return normalized;
+}
 
 async function handleWhatsAppMessage(message) {
   const decision = analyzeWhatsAppCommand(message);
@@ -139,4 +185,12 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-export { app, handleUploadStory, handleWhatsAppMessage, confirmations, scheduler };
+export {
+  app,
+  handleUploadStory,
+  handleWhatsAppMessage,
+  confirmations,
+  isTwilioWhatsAppPayload,
+  normalizeTwilioWhatsAppPayload,
+  scheduler
+};

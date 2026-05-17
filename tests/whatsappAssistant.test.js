@@ -42,6 +42,26 @@ test('requires clarification when upload intent has no media', () => {
   assert.match(decision.message, /attach an image or video/i);
 });
 
+test('preserves Twilio media url metadata while normalizing WhatsApp messages', () => {
+  const message = normalizeWhatsAppMessage({
+    from: 'whatsapp:+972501234567',
+    text: 'upload this',
+    media: {
+      url: 'https://api.twilio.com/media/ME123',
+      contentType: 'image/jpeg',
+      provider: 'twilio'
+    }
+  });
+
+  assert.deepEqual(message.media, {
+    path: undefined,
+    url: 'https://api.twilio.com/media/ME123',
+    whatsappFilePath: undefined,
+    contentType: 'image/jpeg',
+    provider: 'twilio'
+  });
+});
+
 test('turns confirmation into the pending draft command only after explicit approval', () => {
   const confirmations = new ConfirmationManager();
   const draft = confirmations.save({

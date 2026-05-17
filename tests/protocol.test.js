@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeCommand, normalizeHashtags, summarizePost } from '../src/protocol.js';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import path from 'node:path';
+import { normalizeCommand, normalizeHashtags, resolveMediaFile, summarizePost } from '../src/protocol.js';
 import { normalizeMultipartUpload } from '../src/whatsappUpload.js';
 
 test('normalizes Upload Story commands from WhatsApp JSON', () => {
@@ -60,4 +63,44 @@ test('normalizes multipart WhatsApp media uploads into Upload Story commands', (
 
 test('rejects multipart uploads without media files', () => {
   assert.throws(() => normalizeMultipartUpload({ from: '+15550001111' }, []), /Missing uploaded media file/);
+});
+
+test('retries protected Twilio media URLs with basic auth after 401', async () => {
+  const expectedAuth = `Basic ${Buffer.from('AC123:secret').toString('base64')}`;
+  const authorizations = [];
+  const server = http.createServer((req, res) => {
+    authorizations.push(req.headers.authorization);
+    if (req.headers.authorization !== expectedAuth) {
+      res.writeHead(401, { 'content-type': 'text/plain' });
+      res.end('auth required');
+      return;
+    }
+
+    res.writeHead(200, { 'content-type': 'image/jpeg' });
+    res.end(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+  });
+  const downloadDir = path.join(process.cwd(), 'tmp', 'protocol-twilio-auth');
+
+  await new Promise((resolve) => server.listen(0, resolve));
+  try {
+    const { port } = server.address();
+    const mediaPath = await resolveMediaFile(
+      {
+        url: `http://127.0.0.1:${port}/2010-04-01/Accounts/AC123/Messages/SM123/Media/ME123`,
+        contentType: 'image/jpeg',
+        provider: 'twilio'
+      },
+      {
+        downloadDir,
+        twilioAccountSid: 'AC123',
+        twilioAuthToken: 'secret'
+      }
+    );
+
+    assert.equal(path.extname(mediaPath), '.jpg');
+    assert.deepEqual(authorizations, [undefined, expectedAuth]);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    await fs.rm(downloadDir, { recursive: true, force: true });
+  }
 });

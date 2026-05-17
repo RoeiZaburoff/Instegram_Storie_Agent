@@ -55,6 +55,8 @@ npm start
 - `POST /webhook/whatsapp` — JSON WhatsApp webhook receiver for text/media references and confirmation messages.
 - `POST /webhook/whatsapp/upload-story` — multipart WhatsApp media receiver. Accepted media fields: `media`, `image`, `photo`, or `file`.
 
+`POST /webhook/whatsapp` also accepts Twilio WhatsApp Sandbox `application/x-www-form-urlencoded` webhooks. The adapter maps Twilio `From` to the chat id, `Body` to the message text, and `MediaUrl0` / `MediaContentType0` to a media URL. If Twilio media download returns `401` or `403`, set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` so the downloader can retry with HTTP Basic Auth.
+
 ## Tests
 
 ```bash
