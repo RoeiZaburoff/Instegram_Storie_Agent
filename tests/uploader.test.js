@@ -7,16 +7,17 @@ test('builds mobile persistent context options from the requested device', () =>
     headless: false,
     chromeExecutablePath: undefined,
     mobileEmulation: true,
-    mobileDevice: 'iPhone 13'
+    mobileDevice: 'Pixel 7'
   });
 
   const options = uploader.contextOptions();
+
   assert.equal(options.isMobile, true);
   assert.equal(options.hasTouch, true);
   assert.equal(options.headless, false);
-  assert.equal(options.viewport.width, 390);
-  assert.match(options.userAgent, /iPhone/);
-  assert.equal(options.defaultBrowserType, 'webkit');
+  assert.equal(options.viewport.width, 412);
+  assert.match(options.userAgent, /Pixel 7|Android/);
+  assert.equal(options.defaultBrowserType, 'chromium');
 });
 
 test('keeps desktop context options when mobile emulation is disabled', () => {
@@ -24,10 +25,11 @@ test('keeps desktop context options when mobile emulation is disabled', () => {
     headless: true,
     chromeExecutablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     mobileEmulation: false,
-    mobileDevice: 'iPhone 13'
+    mobileDevice: 'Pixel 7'
   });
 
   const options = uploader.contextOptions();
+
   assert.deepEqual(options, {
     headless: true,
     executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'

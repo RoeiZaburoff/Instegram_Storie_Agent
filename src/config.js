@@ -2,7 +2,7 @@ import 'dotenv/config';
 import path from 'node:path';
 
 const DEFAULT_STORIES_DIR = process.platform === 'win32' ? 'C:/Stories' : path.resolve('Stories');
-const DEFAULT_CHROME_USER_DATA_DIR = path.resolve('playwright-profile');
+const DEFAULT_CHROME_USER_DATA_DIR = path.resolve('playwright-profile-pixel7');
 
 export const config = {
   port: Number(process.env.PORT ?? 3000),
@@ -21,7 +21,8 @@ export const config = {
   whatsappAuthToken: process.env.WHATSAPP_AUTH_TOKEN,
   dryRun: process.env.DRY_RUN === 'true',
   mobileEmulation: process.env.MOBILE_EMULATION !== 'false',
-  mobileDevice: process.env.MOBILE_DEVICE ?? 'iPhone 13',
+  mobileDevice: process.env.MOBILE_DEVICE ?? 'Pixel 7',
   debugPauseMs: Number(process.env.DEBUG_PAUSE_MS ?? 0),
-  keepBrowserOpenOnError: process.env.KEEP_BROWSER_OPEN_ON_ERROR === 'true'
+  keepBrowserOpenOnError: process.env.KEEP_BROWSER_OPEN_ON_ERROR === 'true',
+  debugStepMode: process.env.DEBUG_STEP_MODE === 'true'
 };

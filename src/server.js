@@ -30,7 +30,8 @@ app.get('/debug/config', (_req, res) => {
     chromeUserDataDir: config.chromeUserDataDir,
     hasChromeCdpUrl: Boolean(config.chromeCdpUrl),
     debugPauseMs: config.debugPauseMs,
-    keepBrowserOpenOnError: config.keepBrowserOpenOnError
+    keepBrowserOpenOnError: config.keepBrowserOpenOnError,
+    debugStepMode: config.debugStepMode
   });
 });
 

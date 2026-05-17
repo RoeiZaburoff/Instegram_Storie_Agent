@@ -16,9 +16,9 @@ async function loadConfigWithEnv(envValue) {
   }
 }
 
-test('defaults Chrome user data dir to an absolute playwright-profile path', async () => {
+test('defaults Chrome user data dir to an absolute Pixel 7 profile path', async () => {
   const config = await loadConfigWithEnv(undefined);
-  assert.equal(config.chromeUserDataDir, path.resolve('playwright-profile'));
+  assert.equal(config.chromeUserDataDir, path.resolve('playwright-profile-pixel7'));
   assert.equal(path.isAbsolute(config.chromeUserDataDir), true);
 });
 
@@ -28,7 +28,7 @@ test('resolves provided Chrome user data dir to an absolute path', async () => {
   assert.equal(path.isAbsolute(config.chromeUserDataDir), true);
 });
 
-test('defaults mobile emulation to iPhone 13', async () => {
+test('defaults mobile emulation to Pixel 7', async () => {
   const previousEmulation = process.env.MOBILE_EMULATION;
   const previousDevice = process.env.MOBILE_DEVICE;
   delete process.env.MOBILE_EMULATION;
@@ -38,7 +38,7 @@ test('defaults mobile emulation to iPhone 13', async () => {
     const moduleUrl = new URL(`../src/config.js?case=${Date.now()}-${Math.random()}`, import.meta.url);
     const config = (await import(moduleUrl)).config;
     assert.equal(config.mobileEmulation, true);
-    assert.equal(config.mobileDevice, 'iPhone 13');
+    assert.equal(config.mobileDevice, 'Pixel 7');
   } finally {
     if (previousEmulation === undefined) delete process.env.MOBILE_EMULATION;
     else process.env.MOBILE_EMULATION = previousEmulation;

@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
-import { chromium, devices } from 'playwright';
 import path from 'node:path';
+import { chromium, devices } from 'playwright';
 
 const SECURITY_PATTERNS = [/security/i, /verification/i, /two-factor/i, /two factor/i, /enter code/i, /suspicious/i];
 
@@ -25,6 +25,7 @@ export class InstagramStoryUploader {
     const browserSession = await this.openBrowser();
     const { browser, context, page, close } = browserSession;
     let uploadError;
+
     try {
       await page.goto(this.options.instagramUrl, { waitUntil: 'domcontentloaded' });
       await this.checkSecurity(page);
@@ -106,7 +107,7 @@ export class InstagramStoryUploader {
       return baseOptions;
     }
 
-    const requestedDevice = this.options.mobileDevice || 'iPhone 13';
+    const requestedDevice = this.options.mobileDevice || 'Pixel 7';
     const device = devices[requestedDevice];
     if (!device) {
       throw new Error(`Unknown Playwright mobile device: ${requestedDevice}`);
@@ -122,38 +123,68 @@ export class InstagramStoryUploader {
     console.log(`[browser] Mobile viewport: ${device.viewport.width}x${device.viewport.height} @ ${device.deviceScaleFactor}x`);
     console.log(`[browser] Mobile user agent: ${device.userAgent}`);
     console.log('[browser] Reminder: Instagram Story upload requires mobile web mode.');
+
     return contextOptions;
   }
 
   async openStoryComposer(page) {
-    await clickFirst(page, [
-      page.getByRole('link', { name: /create/i }),
-      page.getByRole('button', { name: /create/i }),
-      page.locator('svg[aria-label="New post"]').locator('xpath=ancestor::*[@role="button" or @role="link"][1]')
-    ], 'Create button');
-    await humanDelay();
-    await clickFirst(page, [
-      page.getByRole('menuitem', { name: /story/i }),
-      page.getByText(/^story$/i),
-      page.getByRole('button', { name: /story/i })
-    ], 'Story option');
+    console.log('[instagram-flow] Opening Instagram home');
+    await page.goto(this.options.instagramUrl, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
+    await page.waitForTimeout(3000);
+    await this.checkSecurity(page);
+
+    console.log('[instagram-flow] Clicking Home if available');
+    await page.getByRole('navigation').getByRole('link', { name: 'Home' }).click({ timeout: 8000 }).catch(() => null);
+
+    await this.screenshot(page, 'before-story-story').catch(() => null);
+
+    console.log('[instagram-flow] Clicking Story Story button');
+    await page.getByRole('button', { name: /Story Story/i }).click({ timeout: 15000 });
   }
 
   async attachMedia(page, mediaPath) {
-    const chooserPromise = page.waitForEvent('filechooser', { timeout: 8000 }).catch(() => null);
-    await humanDelay();
-    const directInput = page.locator('input[type="file"]').first();
-    if (await directInput.count()) {
-      await directInput.setInputFiles(mediaPath);
+    const storyButton = page.getByRole('button', { name: /Story Story/i });
+
+    console.log('[instagram-flow] Waiting for file chooser');
+    const chooserPromise = page.waitForEvent('filechooser', { timeout: 15000 }).catch(() => null);
+
+    await storyButton.click({ timeout: 15000 }).catch(() => null);
+
+    const chooser = await chooserPromise;
+    if (chooser) {
+      console.log('[instagram-flow] Setting file:', mediaPath);
+      await chooser.setFiles(mediaPath);
+      await this.afterMediaSelected(page);
       return;
     }
-    await clickFirst(page, [
-      page.getByRole('button', { name: /select from computer|upload|choose/i }),
-      page.getByText(/select from computer|upload|choose/i)
-    ], 'Media upload button');
-    const chooser = await chooserPromise;
-    if (!chooser) throw new Error('File chooser did not open.');
-    await chooser.setFiles(mediaPath);
+
+    const fileInput = page.locator('input[type="file"]').first();
+    if (await fileInput.count()) {
+      console.log('[instagram-flow] Setting file:', mediaPath);
+      await fileInput.setInputFiles(mediaPath);
+      await this.afterMediaSelected(page);
+      return;
+    }
+
+    await storyButton.setInputFiles(mediaPath)
+      .then(async () => {
+        console.log('[instagram-flow] Setting file:', mediaPath);
+        await this.afterMediaSelected(page);
+      })
+      .catch((error) => {
+        throw new Error(`Unable to attach media via Story Story button: ${error.message}`);
+      });
+  }
+
+  async afterMediaSelected(page) {
+    await this.screenshot(page, 'after-selecting-file').catch(() => null);
+
+    console.log('[instagram-flow] Opening story create page');
+    await page.goto('https://www.instagram.com/create/story/', { waitUntil: 'domcontentloaded' }).catch(() => null);
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
+    await page.waitForTimeout(3000);
+    await this.checkSecurity(page);
   }
 
   async decorateStory(page, caption, metadata) {
@@ -167,11 +198,21 @@ export class InstagramStoryUploader {
 
   async share(page) {
     await this.checkSecurity(page);
+
+    page.once('dialog', async (dialog) => {
+      console.log(`[instagram-dialog] ${dialog.message()}`);
+      await dialog.dismiss().catch(() => {});
+    });
+
+    await this.screenshot(page, 'before-add-to-story').catch(() => null);
     await humanDelay();
+
+    console.log('[instagram-flow] Clicking Add to your story');
     await clickFirst(page, [
-      page.getByRole('button', { name: /share to story|your story|share/i }),
-      page.getByText(/share to story|your story|share/i)
-    ], 'Share to Story button');
+      page.getByRole('button', { name: /Add to your story/i }),
+      page.getByRole('button', { name: /share to story|your story|share|add to your story/i }),
+      page.getByText(/add to your story|share to story|your story|share/i)
+    ], 'Add to your story button');
   }
 
   async waitForUploadCompletion(page) {
