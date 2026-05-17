@@ -54,3 +54,122 @@ test('rejects CDP when mobile emulation is enabled', async () => {
 
   await assert.rejects(() => uploader.openBrowser(), /CHROME_CDP_URL cannot be used with MOBILE_EMULATION=true/);
 });
+
+test('openStoryComposer waits for Story Story without clicking it', async () => {
+  const calls = [];
+  const storyButton = {
+    waitFor: async (options) => calls.push(['story.waitFor', options]),
+    click: async () => calls.push(['story.click'])
+  };
+  const homeLink = {
+    click: async (options) => calls.push(['home.click', options])
+  };
+  const navigation = {
+    getByRole: (_role, options) => {
+      assert.equal(options.name, 'Home');
+      return homeLink;
+    }
+  };
+  const page = {
+    goto: async (url, options) => calls.push(['goto', url, options]),
+    waitForLoadState: async (state, options) => calls.push(['waitForLoadState', state, options]),
+    waitForTimeout: async (ms) => calls.push(['waitForTimeout', ms]),
+    getByRole: (role, options = {}) => {
+      if (role === 'navigation') return navigation;
+      if (role === 'button' && options.name.test('Story Story')) return storyButton;
+      throw new Error(`Unexpected role lookup: ${role}`);
+    }
+  };
+  const uploader = new InstagramStoryUploader({
+    instagramUrl: 'https://www.instagram.com/',
+    screenshotDir: '/tmp'
+  });
+  uploader.checkSecurity = async () => calls.push(['checkSecurity']);
+  uploader.screenshot = async (_page, label) => calls.push(['screenshot', label]);
+
+  await uploader.openStoryComposer(page);
+
+  assert.deepEqual(calls.map((call) => call[0]), [
+    'goto',
+    'waitForLoadState',
+    'waitForTimeout',
+    'checkSecurity',
+    'home.click',
+    'screenshot',
+    'story.waitFor'
+  ]);
+  assert.equal(calls.some((call) => call[0] === 'story.click'), false);
+});
+
+test('attachMedia arms file chooser before clicking Story Story once', async () => {
+  const calls = [];
+  const logs = [];
+  const originalLog = console.log;
+  const chooser = {
+    setFiles: async (mediaPath) => calls.push(['chooser.setFiles', mediaPath])
+  };
+  const storyButton = {
+    click: async (options) => calls.push(['story.click', options]),
+    setInputFiles: async () => calls.push(['story.setInputFiles'])
+  };
+  const page = {
+    getByRole: (role, options = {}) => {
+      assert.equal(role, 'button');
+      assert.equal(options.name.test('Story Story'), true);
+      return storyButton;
+    },
+    waitForEvent: async (event, options) => {
+      calls.push(['waitForEvent', event, options]);
+      return chooser;
+    },
+    locator: () => ({
+      first: () => ({
+        count: async () => {
+          calls.push(['input.count']);
+          return 0;
+        },
+        setInputFiles: async () => calls.push(['input.setInputFiles'])
+      })
+    })
+  };
+  const uploader = new InstagramStoryUploader({});
+  uploader.afterMediaSelected = async () => calls.push(['afterMediaSelected']);
+
+  console.log = (...args) => logs.push(args.join(' '));
+  try {
+    await uploader.attachMedia(page, '/Stories/test.jpeg');
+  } finally {
+    console.log = originalLog;
+  }
+
+  assert.deepEqual(calls.map((call) => call[0]), [
+    'waitForEvent',
+    'story.click',
+    'chooser.setFiles',
+    'afterMediaSelected'
+  ]);
+  assert.equal(calls.filter((call) => call[0] === 'story.click').length, 1);
+  assert.ok(logs.indexOf('[instagram-flow] Preparing file chooser before clicking Story Story') < logs.indexOf('[instagram-flow] Clicking Story Story button'));
+});
+
+test('waitForUploadCompletion rejects when story verification fails', async () => {
+  const calls = [];
+  const page = {
+    waitForLoadState: async (state, options) => calls.push(['waitForLoadState', state, options]),
+    waitForTimeout: async (ms) => calls.push(['waitForTimeout', ms])
+  };
+  const uploader = new InstagramStoryUploader({});
+  uploader.checkSecurity = async () => calls.push(['checkSecurity']);
+  uploader.verifyStoryUploaded = async () => {
+    calls.push(['verifyStoryUploaded']);
+    throw new Error('verification failed');
+  };
+
+  await assert.rejects(() => uploader.waitForUploadCompletion(page), /verification failed/);
+  assert.deepEqual(calls.map((call) => call[0]), [
+    'waitForLoadState',
+    'waitForTimeout',
+    'checkSecurity',
+    'verifyStoryUploaded'
+  ]);
+});

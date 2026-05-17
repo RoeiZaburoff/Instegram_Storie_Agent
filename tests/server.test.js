@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import http from 'node:http';
+import path from 'node:path';
+import { InstagramStoryUploader } from '../src/instagramStoryUploader.js';
 
 process.env.NODE_ENV = 'test';
 
@@ -36,3 +39,56 @@ test('debug config route returns safe runtime configuration values', async () =>
     assert.equal(Object.hasOwn(body, 'whatsappWebhookUrl'), false);
   });
 });
+
+test('WhatsApp confirm flow calls uploader with saved tmp/whatsapp media path', async () => {
+  const mediaPath = path.join(process.cwd(), 'tmp', 'whatsapp', 'whatsapp-regression.jpeg');
+  const uploaded = [];
+  const originalUploadStory = InstagramStoryUploader.prototype.uploadStory;
+
+  await fs.mkdir(path.dirname(mediaPath), { recursive: true });
+  await fs.writeFile(mediaPath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+  InstagramStoryUploader.prototype.uploadStory = async (payload) => {
+    uploaded.push(payload);
+    return { verified: true };
+  };
+
+  try {
+    const moduleId = `../src/server.js?case=confirm-${Date.now()}-${Math.random()}`;
+    const { handleWhatsAppMessage, confirmations } = await import(moduleId);
+    const chatId = `chat-${Date.now()}`;
+
+    const draftResult = await handleWhatsAppMessage({
+      requestId: 'req-tmp-media',
+      chatId,
+      text: 'upload this to story now',
+      media: { whatsappFilePath: mediaPath },
+      raw: {}
+    });
+
+    assert.equal(draftResult.type, 'draft');
+    assert.equal(confirmations.get(chatId).media.whatsappFilePath, mediaPath);
+
+    const confirmResult = await handleWhatsAppMessage({
+      requestId: 'req-confirm',
+      chatId,
+      text: 'confirm',
+      raw: {}
+    });
+
+    assert.equal(confirmResult.type, 'confirm');
+    await waitFor(() => uploaded.length === 1);
+    assert.equal(uploaded[0].mediaPath, mediaPath);
+  } finally {
+    InstagramStoryUploader.prototype.uploadStory = originalUploadStory;
+    await fs.rm(mediaPath, { force: true });
+  }
+});
+
+async function waitFor(predicate, timeoutMs = 1000) {
+  const startedAt = Date.now();
+  while (!predicate()) {
+    if (Date.now() - startedAt > timeoutMs) throw new Error('Timed out waiting for condition.');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}

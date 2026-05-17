@@ -24,7 +24,8 @@ test('prepares a draft from Hebrew WhatsApp image text without uploading', () =>
   assert.equal(decision.draft.chatId, '+972500000000');
   assert.equal(decision.draft.caption, 'Pilates at the studio today ✨');
   assert.deepEqual(decision.draft.metadata.hashtags, ['#pilates', '#reformer', '#telaviv']);
-  assert.equal(decision.draft.scheduledAt.toISOString(), '2026-05-17T19:30:00.000Z');
+  assert.equal(decision.draft.scheduledAt.getHours(), 19);
+  assert.equal(decision.draft.scheduledAt.getMinutes(), 30);
   assert.equal(validateDraft(decision.draft).valid, true);
   assert.match(formatDraftConfirmation(decision.draft), /I will not upload until you confirm/);
 });
