@@ -52,6 +52,7 @@ export function normalizeMultipartUpload(body = {}, files = []) {
     command: body.command ?? 'Upload Story',
     request_id: body.request_id ?? body.requestId,
     chat_id: body.chat_id ?? body.chatId ?? body.from,
+    text: body.text ?? body.body ?? body.message ?? body.caption ?? '',
     media: { whatsapp_file: mediaFile.path },
     caption: body.caption ?? '',
     Location_Tag: body.Location_Tag ?? body.location_tag,
