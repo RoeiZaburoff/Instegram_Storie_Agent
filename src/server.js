@@ -5,6 +5,7 @@ import { InstagramStoryUploader, SecurityCheckRequiredError } from './instagramS
 import { WhatsAppNotifier } from './notifier.js';
 import { resolveMediaFile, summarizePost } from './protocol.js';
 import { createWhatsAppUploadMiddleware, normalizeMultipartUpload } from './whatsappUpload.js';
+import { createOfficialInstagramRouter } from './officialInstagramRoutes.js';
 import {
   analyzeWhatsAppCommand,
   ConfirmationManager,
@@ -29,6 +30,7 @@ const uploader = new InstagramStoryUploader(config);
 const whatsappUpload = createWhatsAppUploadMiddleware({ uploadDir: config.whatsappUploadDir });
 const confirmations = new ConfirmationManager();
 const scheduler = new StoryScheduler({ execute: handleUploadStory });
+const officialInstagramRouter = createOfficialInstagramRouter({ config });
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, dryRun: config.dryRun });
@@ -44,9 +46,17 @@ app.get('/debug/config', (_req, res) => {
     hasChromeCdpUrl: Boolean(config.chromeCdpUrl),
     debugPauseMs: config.debugPauseMs,
     keepBrowserOpenOnError: config.keepBrowserOpenOnError,
-    debugStepMode: config.debugStepMode
+    debugStepMode: config.debugStepMode,
+    officialInstagram: {
+      graphApiVersion: config.metaGraphApiVersion,
+      dryRun: config.officialInstagramDryRun,
+      hasMetaAccessToken: Boolean(config.metaAccessToken),
+      hasInstagramBusinessAccountId: Boolean(config.instagramBusinessAccountId)
+    }
   });
 });
+
+app.use('/api/instagram/official', officialInstagramRouter);
 
 app.post('/webhook/whatsapp/upload-story', (req, res) => {
   whatsappUpload(req, res, async (uploadError) => {
