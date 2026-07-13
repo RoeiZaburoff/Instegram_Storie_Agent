@@ -3,6 +3,9 @@ import path from 'node:path';
 import { chromium, devices } from 'playwright';
 
 const SECURITY_PATTERNS = [/security/i, /verification/i, /two-factor/i, /two factor/i, /enter code/i, /suspicious/i];
+const UPLOAD_ERROR_PATTERNS = [/couldn't upload/i, /couldn’t upload/i, /upload failed/i, /try again/i, /something went wrong/i, /not uploaded/i];
+const ADD_TO_STORY_PATTERN = /add to your story/i;
+const SHARE_BUTTON_PATTERN = /share to story|your story|share|add to your story/i;
 
 export class SecurityCheckRequiredError extends Error {
   constructor(message = 'Instagram security verification screen detected.') {
@@ -139,24 +142,28 @@ export class InstagramStoryUploader {
 
     await this.screenshot(page, 'before-story-story').catch(() => null);
 
-    console.log('[instagram-flow] Clicking Story Story button');
-    await page.getByRole('button', { name: /Story Story/i }).click({ timeout: 15000 });
+    const storyButton = page.getByRole('button', { name: /Story Story/i });
+    await storyButton.waitFor({ state: 'visible', timeout: 15000 });
+    console.log('[instagram-flow] Story Story button is visible');
   }
 
   async attachMedia(page, mediaPath) {
     const storyButton = page.getByRole('button', { name: /Story Story/i });
 
-    console.log('[instagram-flow] Waiting for file chooser');
-    const chooserPromise = page.waitForEvent('filechooser', { timeout: 15000 }).catch(() => null);
-
-    await storyButton.click({ timeout: 15000 }).catch(() => null);
-
-    const chooser = await chooserPromise;
-    if (chooser) {
+    let chooserPromise;
+    try {
+      console.log('[instagram-flow] Preparing file chooser before clicking Story Story');
+      chooserPromise = page.waitForEvent('filechooser', { timeout: 15000 });
+      console.log('[instagram-flow] Clicking Story Story button');
+      await storyButton.click({ timeout: 15000 });
+      const chooser = await chooserPromise;
       console.log('[instagram-flow] Setting file:', mediaPath);
       await chooser.setFiles(mediaPath);
       await this.afterMediaSelected(page);
       return;
+    } catch (error) {
+      if (chooserPromise) await chooserPromise.catch(() => null);
+      console.log('[instagram-flow] filechooser flow failed:', error.message);
     }
 
     const fileInput = page.locator('input[type="file"]').first();
@@ -173,18 +180,37 @@ export class InstagramStoryUploader {
         await this.afterMediaSelected(page);
       })
       .catch((error) => {
-        throw new Error(`Unable to attach media via Story Story button: ${error.message}`);
+        throw new Error(`Unable to attach media: filechooser, input[type=file], and Story Story setInputFiles all failed. ${error.message}`);
       });
   }
 
   async afterMediaSelected(page) {
-    await this.screenshot(page, 'after-selecting-file').catch(() => null);
-
-    console.log('[instagram-flow] Opening story create page');
-    await page.goto('https://www.instagram.com/create/story/', { waitUntil: 'domcontentloaded' }).catch(() => null);
+    await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => null);
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
     await page.waitForTimeout(3000);
     await this.checkSecurity(page);
+    await this.verifyMediaSelected(page);
+  }
+
+  async verifyMediaSelected(page) {
+    await this.screenshot(page, 'after-file-selected').catch(() => null);
+    console.log('[instagram-flow] current URL:', page.url());
+
+    const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
+    if (UPLOAD_ERROR_PATTERNS.some((pattern) => pattern.test(bodyText))) {
+      throw new Error('Instagram reported an upload error after selecting the file.');
+    }
+
+    console.log('[instagram-flow] checking media preview');
+    const mediaPreviewVisible = await this.hasMediaPreview(page);
+
+    console.log('[instagram-flow] checking Add to your story button');
+    const addButtonVisible = await this.addToStoryButton(page).isVisible({ timeout: 10000 }).catch(() => false);
+    console.log('[instagram-flow] Add to your story button exists:', addButtonVisible);
+
+    if (!mediaPreviewVisible || !addButtonVisible) {
+      throw new Error('Selected media was not confirmed in the Instagram story editor.');
+    }
   }
 
   async decorateStory(page, caption, metadata) {
@@ -204,21 +230,117 @@ export class InstagramStoryUploader {
       await dialog.dismiss().catch(() => {});
     });
 
-    await this.screenshot(page, 'before-add-to-story').catch(() => null);
+    console.log('[instagram-flow] current URL:', page.url());
+    console.log('[instagram-flow] checking media preview');
+    const mediaPreviewVisible = await this.hasMediaPreview(page);
+    if (!mediaPreviewVisible) {
+      throw new Error('Cannot share because the Instagram story editor media preview is not visible.');
+    }
+
+    console.log('[instagram-flow] checking Add to your story button');
+    const addButton = this.addToStoryButton(page);
+    await addButton.waitFor({ state: 'visible', timeout: 20000 });
+
+    await this.screenshot(page, 'before-share').catch(() => null);
     await humanDelay();
 
     console.log('[instagram-flow] Clicking Add to your story');
-    await clickFirst(page, [
-      page.getByRole('button', { name: /Add to your story/i }),
-      page.getByRole('button', { name: /share to story|your story|share|add to your story/i }),
-      page.getByText(/add to your story|share to story|your story|share/i)
-    ], 'Add to your story button');
+    await clickFirst(page, this.shareLocators(page), 'Add to your story button');
+    console.log('[instagram-flow] clicked Add to your story');
   }
 
   async waitForUploadCompletion(page) {
     await page.waitForLoadState('networkidle', { timeout: 45000 }).catch(() => null);
-    await page.waitForTimeout(randomInt(3000, 6000));
+    await page.waitForTimeout(randomInt(10000, 20000));
     await this.checkSecurity(page);
+    return this.verifyStoryUploaded(page);
+  }
+
+  async verifyStoryUploaded(page) {
+    console.log('[instagram-verify] verifying uploaded story');
+    await this.screenshot(page, 'verify-before').catch(() => null);
+
+    await this.waitForPostShareSignal(page);
+    const verifyUrl = this.options.verifyProfileUrl || this.options.instagramUrl;
+    await page.goto(verifyUrl, { waitUntil: 'domcontentloaded' }).catch(() => null);
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
+    await page.waitForTimeout(5000);
+    await this.checkSecurity(page);
+    await this.screenshot(page, 'verify-home').catch(() => null);
+
+    const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
+    if (UPLOAD_ERROR_PATTERNS.some((pattern) => pattern.test(bodyText))) {
+      await this.screenshot(page, 'verify-failed').catch(() => null);
+      console.log('[instagram-verify] verification failed');
+      throw new Error('Story upload could not be verified from Instagram UI.');
+    }
+
+    const ownStory = this.ownStoryLocators(page);
+    if (await anyLocatorVisible(ownStory, 8000)) {
+      await clickFirst(page, ownStory, 'Your story indicator').catch(() => null);
+      await page.waitForTimeout(3000);
+      await this.screenshot(page, 'verify-story-opened').catch(() => null);
+      const viewerOpened = await this.storyViewerVisible(page);
+      if (viewerOpened) {
+        console.log('[instagram-verify] verification passed');
+        return true;
+      }
+    }
+
+    await this.screenshot(page, 'verify-failed').catch(() => null);
+    console.log('[instagram-verify] verification failed');
+    throw new Error('Story upload could not be verified from Instagram UI.');
+  }
+
+  async waitForPostShareSignal(page) {
+    const addButton = this.addToStoryButton(page);
+    await page.waitForFunction(() => {
+      const text = document.body?.innerText ?? '';
+      return /Your story/i.test(text) || !/Add to your story/i.test(text);
+    }, { timeout: 20000 }).catch(() => null);
+    await addButton.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => null);
+  }
+
+  async hasMediaPreview(page) {
+    return anyLocatorVisible([
+      page.locator('video'),
+      page.locator('canvas'),
+      page.locator('img').filter({ hasNotText: /profile/i }),
+      page.locator('[style*="background-image"]'),
+      page.locator('[aria-label*="Photo" i]'),
+      page.locator('[aria-label*="Video" i]')
+    ], 10000);
+  }
+
+  addToStoryButton(page) {
+    return page.getByRole('button', { name: ADD_TO_STORY_PATTERN }).first();
+  }
+
+  shareLocators(page) {
+    return [
+      page.getByRole('button', { name: ADD_TO_STORY_PATTERN }),
+      page.getByRole('button', { name: SHARE_BUTTON_PATTERN }),
+      page.getByText(SHARE_BUTTON_PATTERN)
+    ];
+  }
+
+  ownStoryLocators(page) {
+    return [
+      page.getByRole('button', { name: /your story/i }),
+      page.getByRole('link', { name: /your story/i }),
+      page.getByText(/your story/i),
+      page.locator('[aria-label*="Your story" i]')
+    ];
+  }
+
+  async storyViewerVisible(page) {
+    return anyLocatorVisible([
+      page.getByRole('dialog'),
+      page.getByRole('button', { name: /close/i }),
+      page.getByText(/reply|send message|pause|mute/i),
+      page.locator('video'),
+      page.locator('canvas')
+    ], 5000);
   }
 
   async checkSecurity(page) {
@@ -269,6 +391,13 @@ async function clickFirst(page, locators, label) {
     }
   }
   throw new Error(`${label} not found.`);
+}
+
+async function anyLocatorVisible(locators, timeout = 5000) {
+  for (const locator of locators) {
+    if (await locator.first().isVisible({ timeout }).catch(() => false)) return true;
+  }
+  return false;
 }
 
 async function naturalScroll(page) {

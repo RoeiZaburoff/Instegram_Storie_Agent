@@ -74,7 +74,9 @@ export function normalizeWhatsAppMessage(payload = {}) {
   const media = typeof mediaSource === 'string' ? { path: mediaSource } : {
     path: mediaSource.path ?? mediaSource.localPath,
     url: mediaSource.url ?? mediaSource.link,
-    whatsappFilePath: mediaSource.whatsapp_file ?? mediaSource.whatsappFilePath ?? mediaSource.path
+    whatsappFilePath: mediaSource.whatsapp_file ?? mediaSource.whatsappFilePath ?? mediaSource.path,
+    contentType: mediaSource.contentType ?? mediaSource.content_type,
+    provider: mediaSource.provider
   };
 
   return {

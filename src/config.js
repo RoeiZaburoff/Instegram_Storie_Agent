@@ -23,6 +23,8 @@ export const config = {
   instagramBusinessAccountId: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
   metaGraphApiVersion: process.env.META_GRAPH_API_VERSION ?? 'v25.0',
   officialInstagramDryRun: process.env.OFFICIAL_INSTAGRAM_DRY_RUN === 'true' || process.env.DRY_RUN === 'true',
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
   dryRun: process.env.DRY_RUN === 'true',
   mobileEmulation: process.env.MOBILE_EMULATION !== 'false',
   mobileDevice: process.env.MOBILE_DEVICE ?? 'Pixel 7',

@@ -2,6 +2,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 const SUPPORTED_MEDIA_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.mp4', '.mov']);
+const MEDIA_MIME_EXTENSIONS = new Map([
+  ['image/jpeg', '.jpg'],
+  ['image/png', '.png'],
+  ['image/webp', '.webp'],
+  ['video/mp4', '.mp4'],
+  ['video/quicktime', '.mov']
+]);
 
 export function normalizeCommand(payload = {}, options = {}) {
   const action = String(payload.command ?? payload.action ?? '').trim().toLowerCase();
@@ -17,7 +24,9 @@ export function normalizeCommand(payload = {}, options = {}) {
     media: {
       path: mediaSource.path ?? mediaSource.localPath,
       url: mediaSource.url,
-      whatsappFilePath: mediaSource.whatsapp_file ?? mediaSource.whatsappFilePath
+      whatsappFilePath: mediaSource.whatsapp_file ?? mediaSource.whatsappFilePath,
+      contentType: mediaSource.contentType ?? mediaSource.content_type,
+      provider: mediaSource.provider
     },
     caption: payload.caption ?? '',
     metadata: {
@@ -52,7 +61,11 @@ export async function resolveMediaFile(media, options) {
   }
 
   if (media.url) {
-    return downloadMedia(media.url, options.downloadDir);
+    return downloadMedia(media.url, options.downloadDir, {
+      contentType: media.contentType,
+      twilioAccountSid: options.twilioAccountSid,
+      twilioAuthToken: options.twilioAuthToken
+    });
   }
 
   throw new Error('No media file could be resolved.');
@@ -69,13 +82,20 @@ export async function assertSupportedFile(filePath) {
   }
 }
 
-async function downloadMedia(url, downloadDir) {
+async function downloadMedia(url, downloadDir, options = {}) {
   await fs.mkdir(downloadDir, { recursive: true });
-  const response = await fetch(url);
+  let response = await fetch(url);
+  if ((response.status === 401 || response.status === 403) && options.twilioAccountSid && options.twilioAuthToken) {
+    response = await fetch(url, {
+      headers: {
+        authorization: `Basic ${Buffer.from(`${options.twilioAccountSid}:${options.twilioAuthToken}`).toString('base64')}`
+      }
+    });
+  }
   if (!response.ok) {
     throw new Error(`Media download failed: ${response.status} ${response.statusText}`);
   }
-  const ext = path.extname(new URL(url).pathname).toLowerCase() || '.jpg';
+  const ext = extensionForDownload(url, options.contentType ?? response.headers.get('content-type'));
   if (!SUPPORTED_MEDIA_EXTENSIONS.has(ext)) {
     throw new Error(`Unsupported media URL type: ${ext}`);
   }
@@ -84,6 +104,14 @@ async function downloadMedia(url, downloadDir) {
   const buffer = Buffer.from(await response.arrayBuffer());
   await fs.writeFile(output, buffer);
   return output;
+}
+
+function extensionForDownload(url, contentType) {
+  const ext = path.extname(new URL(url).pathname).toLowerCase();
+  if (ext) return ext;
+
+  const mime = String(contentType ?? '').split(';')[0].trim().toLowerCase();
+  return MEDIA_MIME_EXTENSIONS.get(mime) ?? '.jpg';
 }
 
 function cryptoRandomId() {

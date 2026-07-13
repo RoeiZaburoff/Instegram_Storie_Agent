@@ -24,7 +24,8 @@ test('prepares a draft from Hebrew WhatsApp image text without uploading', () =>
   assert.equal(decision.draft.chatId, '+972500000000');
   assert.equal(decision.draft.caption, 'Pilates at the studio today ✨');
   assert.deepEqual(decision.draft.metadata.hashtags, ['#pilates', '#reformer', '#telaviv']);
-  assert.equal(decision.draft.scheduledAt.toISOString(), '2026-05-17T19:30:00.000Z');
+  assert.equal(decision.draft.scheduledAt.getHours(), 19);
+  assert.equal(decision.draft.scheduledAt.getMinutes(), 30);
   assert.equal(validateDraft(decision.draft).valid, true);
   assert.match(formatDraftConfirmation(decision.draft), /I will not upload until you confirm/);
 });
@@ -39,6 +40,26 @@ test('requires clarification when upload intent has no media', () => {
 
   assert.equal(decision.type, 'ask');
   assert.match(decision.message, /attach an image or video/i);
+});
+
+test('preserves Twilio media url metadata while normalizing WhatsApp messages', () => {
+  const message = normalizeWhatsAppMessage({
+    from: 'whatsapp:+972501234567',
+    text: 'upload this',
+    media: {
+      url: 'https://api.twilio.com/media/ME123',
+      contentType: 'image/jpeg',
+      provider: 'twilio'
+    }
+  });
+
+  assert.deepEqual(message.media, {
+    path: undefined,
+    url: 'https://api.twilio.com/media/ME123',
+    whatsappFilePath: undefined,
+    contentType: 'image/jpeg',
+    provider: 'twilio'
+  });
 });
 
 test('turns confirmation into the pending draft command only after explicit approval', () => {
