@@ -32,7 +32,12 @@ test('debug config route returns safe runtime configuration values', async () =>
     assert.equal(typeof body.keepBrowserOpenOnError, 'boolean');
     assert.equal(typeof body.debugStepMode, 'boolean');
 
+    assert.equal(typeof body.officialInstagram, 'object');
+    assert.equal(typeof body.officialInstagram.hasMetaAccessToken, 'boolean');
+    assert.equal(typeof body.officialInstagram.hasInstagramBusinessAccountId, 'boolean');
     assert.equal(Object.hasOwn(body, 'whatsappAuthToken'), false);
     assert.equal(Object.hasOwn(body, 'whatsappWebhookUrl'), false);
+    assert.equal(Object.hasOwn(body, 'metaAccessToken'), false);
+    assert.equal(Object.hasOwn(body, 'instagramBusinessAccountId'), false);
   });
 });
